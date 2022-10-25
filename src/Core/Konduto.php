@@ -3,6 +3,8 @@
 use \Konduto\Models\Order;
 use \Konduto\Exceptions;
 use \Konduto\Params;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Konduto SDK
@@ -30,6 +32,7 @@ abstract class Konduto {
 
     public static $key = "";
     private static $useSSL = true;
+    private static $logger = null;
     protected static $additionalCurlOpts = array();
 
     /**
@@ -44,6 +47,18 @@ abstract class Konduto {
         self::$key = $key;
         self::$useSSL = $key[0] == 'P';
         return true;
+    }
+
+    /**
+     * setLogger
+     * 
+     * Change the default logger to be used, disabled by default.
+     *
+     * @param LoggerInterface|null $logger
+     * @return void
+     */
+    public static function setLogger(?LoggerInterface $logger) {
+        self::$logger = $logger;
     }
 
     /**
@@ -124,18 +139,26 @@ abstract class Konduto {
         if ($method == "get" || $method == "put")
             $uri .= "/$id";
 
-        $request = new HttpRequest($method, $uri, self::$useSSL, self::$additionalCurlOpts);
-        $request->setBasicAuthorization(self::$key);
-        if (!is_null($body)) $request->setBodyAsJson($body);
+        self::$logger?->info("$method $uri Attempting to request...", compact('body'));
 
-        $response = $request->send();
-        $response->checkCurlResponse();
-        $jsonBody = $response->getBodyAsJson();
-        if (!$response->isOk() || is_null($jsonBody) || !self::isBodyStatusOk($jsonBody)) {
-            $httpStatus = $response->getHttpStatus();
-            throw Exceptions\KondutoException::buildFromHttpStatus($jsonBody, $httpStatus);
+        try {
+            $request = new HttpRequest($method, $uri, self::$useSSL, self::$additionalCurlOpts);
+            $request->setBasicAuthorization(self::$key);
+            if (!is_null($body)) $request->setBodyAsJson($body);
+
+            $response = $request->send();
+            $response->checkCurlResponse();
+            $jsonBody = $response->getBodyAsJson();
+            if (!$response->isOk() || is_null($jsonBody) || !self::isBodyStatusOk($jsonBody)) {
+                $httpStatus = $response->getHttpStatus();
+                throw Exceptions\KondutoException::buildFromHttpStatus($jsonBody, $httpStatus);
+            }
+        } catch (Throwable $e) {
+            self::$logger?->error("$method $uri Exception thrown [!]", compact('exception'));
+            throw $e;
         }
 
+        self::$logger?->info("$method $uri Response succesfully received!", compact('json'));
         return $response;
     }
 
