@@ -2,7 +2,7 @@
 
 use \Konduto\Models\Order;
 use \Konduto\Exceptions;
-use Konduto\Log\LoggerInterface;
+use \Konduto\Log\LoggerInterface;
 use \Konduto\Params;
 use Throwable;
 
@@ -139,7 +139,7 @@ abstract class Konduto {
         if ($method == "get" || $method == "put")
             $uri .= "/$id";
 
-        self::$logger?->info("$method $uri Attempting to request...", compact('body'));
+        self::$logger?->info("$method $uri Attempting to request...", compact('method', 'uri', 'body'));
 
         try {
             $request = new HttpRequest($method, $uri, self::$useSSL, self::$additionalCurlOpts);
@@ -149,16 +149,19 @@ abstract class Konduto {
             $response = $request->send();
             $response->checkCurlResponse();
             $jsonBody = $response->getBodyAsJson();
+            $httpStatus = $response->getHttpStatus();
             if (!$response->isOk() || is_null($jsonBody) || !self::isBodyStatusOk($jsonBody)) {
-                $httpStatus = $response->getHttpStatus();
                 throw Exceptions\KondutoException::buildFromHttpStatus($jsonBody, $httpStatus);
             }
+        } catch (Exceptions\KondutoException $e) {
+            self::$logger?->error("$method $uri Konduto exception thrown [!]", compact('method', 'uri', 'body', 'exception', 'httpStatus'));
+            throw $e;
         } catch (Throwable $e) {
-            self::$logger?->error("$method $uri Exception thrown [!]", compact('exception'));
+            self::$logger?->error("$method $uri Exception thrown [!]", compact('method', 'uri', 'body', 'exception'));
             throw $e;
         }
 
-        self::$logger?->info("$method $uri Response succesfully received!", compact('json'));
+        self::$logger?->info("$method $uri Response succesfully received!", compact('method', 'uri', 'body', 'jsonBody', 'httpStatus'));
         return $response;
     }
 
