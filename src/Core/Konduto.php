@@ -2,8 +2,8 @@
 
 use \Konduto\Models\Order;
 use \Konduto\Exceptions;
+use Konduto\Log\LoggerInterface;
 use \Konduto\Params;
-use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
